@@ -1,0 +1,107 @@
+package com.tcl.adsdk.core;
+
+import java.net.HttpURLConnection;
+import java.net.URL;
+import com.tcl.adsdk.database.SelfLog;
+import android.text.TextUtils;
+
+/**
+ * ----------------------------------------------------------
+ * Copyright (c) 2014 TCL, All Rights Reserved.
+ * ----------------------------------------------------------
+ * 
+ * @author dingld/dingld@tcl.com/2014.9.4
+ *   
+ * @version: v3.0
+ *
+ */
+public final class AdsUploadClickLog {
+   private String     mRequestString = null;
+   private String mCookie = null;
+   private String mUA = null;
+   private static final String TAG = "AdsUploadClickLog";
+   private int retryCount = 0;
+   private final int MAX_RETRY_TIMES = 3;
+   
+   class Connection implements Runnable {    
+      public void run() {
+         // TODO Auto-generated method stub
+         retryCount = 0;
+         while(retryCount < MAX_RETRY_TIMES) {
+            SelfLog.show(TAG, "retryCount retry : " + retryCount + " times .");
+            HttpURLConnection urlConnection = null;
+            try {  
+               URL url = new URL(mRequestString);
+               SelfLog.show(TAG, "run " + mRequestString);
+               urlConnection = (HttpURLConnection) url.openConnection();
+               urlConnection.setRequestMethod("GET");
+               if (!TextUtils.isEmpty(mCookie)) {
+                  SelfLog.show(TAG, " mCookie== " + mCookie);
+                  urlConnection.setRequestProperty("Cookie", mCookie);
+               }
+               if (!TextUtils.isEmpty(mUA)) {
+                  SelfLog.show(TAG, " mUA== " + mUA);
+                  urlConnection.addRequestProperty("User-Agent", mUA);
+               }
+               urlConnection.setConnectTimeout(30*1000);  //60s
+               urlConnection.setReadTimeout(30*1000);   //60ss
+               urlConnection.getInputStream();
+               SelfLog.show(TAG, "AdsUploadClickLog Send request  == " + urlConnection.getResponseCode());
+               if (urlConnection.getResponseCode() == 200) {
+                  SelfLog.show(TAG, "AdsUploadClickLog Send request ok ~~~~~~~~~~~~~~~~~~~");
+                  retryCount = MAX_RETRY_TIMES;
+               }
+            } catch (Exception e) {
+               e.printStackTrace();
+            } finally {
+               urlConnection.disconnect();
+            }
+            retryCount++;
+            if (retryCount < MAX_RETRY_TIMES) {
+               try {
+                  Thread.sleep(5000 * retryCount);// Retry interval 5,10,15
+               } catch (InterruptedException e) {
+                  // TODO Auto-generated catch block
+                  e.printStackTrace();
+               }
+            }
+         }
+      }
+   }
+
+   public static class Builder {
+      private String url = null;
+      private String cookie = null;
+      private String ua = null;
+
+      public Builder(String url, String cookie, String ua) {
+         this.url = url;
+         this.cookie = cookie;
+         this.ua = ua;
+      }
+
+      public AdsUploadClickLog build() {
+         return new AdsUploadClickLog(this);
+      }
+   }
+   
+   private Boolean createRequestString(Builder builder) {
+      if(builder.url == null || builder.url.trim().length() < 1)
+         return false;
+      
+      mRequestString = builder.url.trim();
+      if (!TextUtils.isEmpty(builder.cookie)) {
+         mCookie = builder.cookie.trim();
+      }
+      if (!TextUtils.isEmpty(builder.ua)) {
+         mUA = builder.ua.trim();
+      }
+      return true;
+   }
+   
+   private AdsUploadClickLog(Builder builder) {
+      if (createRequestString(builder)) {
+         new Thread(new Connection()).start();
+      }
+   }
+}
